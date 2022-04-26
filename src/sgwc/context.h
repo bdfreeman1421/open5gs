@@ -24,6 +24,9 @@
 #include "ogs-gtp.h"
 #include "ogs-pfcp.h"
 
+
+#include "opof_clientlib.h"
+
 #include "timer.h"
 #include "sgwc-sm.h"
 
@@ -45,6 +48,8 @@ typedef struct sgwc_context_s {
     ogs_hash_t      *imsi_ue_hash;  /* hash table (IMSI : SGW_UE) */
 
     ogs_list_t      sgw_ue_list;    /* SGW_UE List */
+
+    sessionTable_t*	opof_handle;    /* offload session table handle */
 } sgwc_context_t;
 
 typedef struct sgwc_ue_s {

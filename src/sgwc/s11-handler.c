@@ -21,6 +21,7 @@
 #include "pfcp-path.h"
 
 #include "s11-handler.h"
+#include "opof-util.h"
 
 static void sess_timeout(ogs_gtp_xact_t *xact, void *data)
 {
@@ -257,6 +258,7 @@ void sgwc_s11_handle_create_session_request(
         sgwc_ue->mme_s11_teid, sgwc_ue->sgw_s11_teid);
 
     sgwc_pfcp_send_session_establishment_request(sess, s11_xact, gtpbuf);
+
 }
 
 void sgwc_s11_handle_modify_bearer_request(
@@ -337,6 +339,13 @@ void sgwc_s11_handle_modify_bearer_request(
 
     /* Data Plane(DL) : eNB-S1U */
     enb_s1u_teid = req->bearer_contexts_to_be_modified.s1_u_enodeb_f_teid.data;
+
+    struct in_addr addr3;
+    addr3.s_addr = enb_s1u_teid->addr;
+    ogs_info("OPOF: modify_bearser_request %s", inet_ntoa(addr3));
+
+
+
     dl_tunnel->remote_teid = be32toh(enb_s1u_teid->teid);
 
     rv = ogs_gtp_f_teid_to_ip(enb_s1u_teid, &remote_ip);
@@ -401,6 +410,41 @@ void sgwc_s11_handle_modify_bearer_request(
 
     sgwc_pfcp_send_bearer_modification_request(
             bearer, s11_xact, gtpbuf, flags);
+    /*  call offload add session */
+    // openoffload_add_session(ogs_ip_t ue_ip, ogs_ip_t enb_gtp_ip, ogs_ip_t sgwu_gtp_ip, uint32_t enb_fteid , uint32_t spgw_teid)
+      
+    /* Find the Tunnel by SGW-S1U-TEID */
+    ogs_ip_t  sgwu_gtp_ip ;
+    memset(&sgwu_gtp_ip, 0, sizeof(ogs_ip_t));
+    sgwu_gtp_ip.addr=dl_tunnel->local_addr->sin.sin_addr.s_addr;
+
+    ogs_ip_t  enb_gtp_ip ;
+    memset(&enb_gtp_ip, 0, sizeof(ogs_ip_t));
+    enb_gtp_ip=remote_ip;
+
+    ogs_ip_t ue_ip ;
+    memset(&ue_ip, 0, sizeof(ogs_ip_t));
+    ue_ip= sess->session.ue_ip;
+
+
+    // ogs_pfcp_f_teid_t *remote_f_teid = NULL; .ipv4 had ue id
+    //
+    struct in_addr addr1;
+    addr1.s_addr = sgwu_gtp_ip.addr;
+
+    struct in_addr addr2;
+    addr2.s_addr = ue_ip.addr;
+
+    ogs_info("OPOF:gnode s_addr %s" , inet_ntoa( sess->gnode->addr.sin.sin_addr))  ;
+    ogs_info("OPOF:sgwu_gtp_ip.addr=dl_tunnel->local_addr->sin.sin_addr.s_addr:%s", inet_ntoa(addr1));
+    ogs_info("OPOF:ue_ip:%s", inet_ntoa(addr2));
+
+    // sgw_gtp_ip.addr should be 127.0.1.100
+    // enb_gtp_ip.addr should be 127.0.1.1
+    rv = openoffload_add_session(ue_ip, enb_gtp_ip , sgwu_gtp_ip , dl_tunnel->remote_teid  , dl_tunnel->local_teid) ;
+    if (rv != OGS_OK) {
+	    ogs_error("Openoffload Add Session Error");
+    }
 }
 
 void sgwc_s11_handle_delete_session_request(
@@ -419,7 +463,8 @@ void sgwc_s11_handle_delete_session_request(
     req = &message->delete_session_request;
     ogs_assert(req);
 
-    ogs_debug("Delete Session Request");
+    //ogs_debug("Delete Session Request");
+    ogs_info("Delete Session Request");
 
     cause_value = OGS_GTP_CAUSE_REQUEST_ACCEPTED;
 
@@ -474,6 +519,18 @@ void sgwc_s11_handle_delete_session_request(
 
     rv = ogs_gtp_xact_commit(s5c_xact);
     ogs_expect(rv == OGS_OK);
+
+    /*  openoffload delete session */
+    //sgwc_tunnel_t *dl_tunnel = NULL;
+    //dl_tunnel = sgwc_dl_tunnel_in_bearer(bearer) ;
+    ogs_info("Deleting offload session");
+    //rv = openoffload_delete_session(dl_tunnel->local_teid);
+    rv = openoffload_delete_session(2);
+    if( rv != OGS_OK) {
+            ogs_error("Error deleting offload session");
+    }
+
+
 }
 
 void sgwc_s11_handle_create_bearer_response(
@@ -596,6 +653,11 @@ void sgwc_s11_handle_create_bearer_response(
 
     /* Data Plane(DL) : eNB-S1U */
     enb_s1u_teid = rsp->bearer_contexts.s1_u_enodeb_f_teid.data;
+
+    //struct in_addr addr1;
+    //addr1.s_addr = enb_s1u_teid->addr;
+    //ogs_info("OPOF_create_sess_response%s", inet_ntoa(addr1));
+    
     dl_tunnel->remote_teid = be32toh(enb_s1u_teid->teid);
 
     ogs_debug("    ENB_S1U_TEID[%d] SGW_S1U_TEID[%d]",
@@ -758,7 +820,8 @@ void sgwc_s11_handle_delete_bearer_response(
     rsp = &message->delete_bearer_response;
     ogs_assert(rsp);
 
-    ogs_debug("Delete Bearer Response");
+    //ogs_debug("Delete Bearer Response");
+    ogs_info("Delete Bearer Response");
 
     cause_value = OGS_GTP_CAUSE_REQUEST_ACCEPTED;
 
@@ -823,6 +886,16 @@ void sgwc_s11_handle_delete_bearer_response(
 
     sgwc_pfcp_send_bearer_modification_request(
             bearer, s5c_xact, gtpbuf, OGS_PFCP_MODIFY_REMOVE);
+
+    /*  openoffload delete session */
+    sgwc_tunnel_t *dl_tunnel = NULL;
+    dl_tunnel = sgwc_dl_tunnel_in_bearer(bearer) ;
+    ogs_info("Deleting offload session");
+    rv = openoffload_delete_session(dl_tunnel->local_teid);
+    if( rv != OGS_OK) {
+            ogs_error("Error deleting offload session");
+    }
+
 }
 
 void sgwc_s11_handle_release_access_bearers_request(
@@ -839,7 +912,8 @@ void sgwc_s11_handle_release_access_bearers_request(
     req = &message->release_access_bearers_request;
     ogs_assert(req);
 
-    ogs_debug("Release Access Bearers Request");
+    //ogs_debug("Release Access Bearers Request");
+    ogs_info("Release Access Bearers Request");
 
     memset(&cause, 0, sizeof(cause));
     cause.value = OGS_GTP_CAUSE_REQUEST_ACCEPTED;
@@ -861,12 +935,25 @@ void sgwc_s11_handle_release_access_bearers_request(
     ogs_debug("    MME_S11_TEID[%d] SGW_S11_TEID[%d]",
         sgwc_ue->mme_s11_teid, sgwc_ue->sgw_s11_teid);
 
+    /*  variables to find session Id for openoffload delete session */
+    //sgwc_bearer_t *bearer = NULL;
+    //sgwc_tunnel_t *dl_tunnel = NULL;
+    int rv = 0;
     ogs_list_for_each(&sgwc_ue->sess_list, sess) {
 
         sess->state.release_access_bearers = false;
         sgwc_pfcp_send_sess_modification_request(
                 sess, s11_xact, gtpbuf,
                 OGS_PFCP_MODIFY_DL_ONLY|OGS_PFCP_MODIFY_DEACTIVATE);
+	/*  openoffload delete session */
+	//bearer = s11_xact->data;
+        //dl_tunnel = sgwc_dl_tunnel_in_bearer(bearer) ;
+        ogs_info("Deleting offload session");
+        //rv = openoffload_delete_session(dl_tunnel->local_teid);
+        rv = openoffload_delete_session(1);
+        if( rv != OGS_OK) {
+               ogs_error("Error deleting offload session");
+        }
     }
 }
 

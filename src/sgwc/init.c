@@ -22,6 +22,8 @@
 #include "gtp-path.h"
 #include "pfcp-path.h"
 
+#include "opof-util.h"
+
 static ogs_thread_t *thread;
 static void sgwc_main(void *data);
 
@@ -50,6 +52,10 @@ int sgwc_initialize()
     if (rv != OGS_OK) return rv;
 
     rv = sgwc_context_parse_config();
+    if (rv != OGS_OK) return rv;
+
+    /*  session offload init  */
+    rv = opof_init();
     if (rv != OGS_OK) return rv;
 
     rv = ogs_log_config_domain(

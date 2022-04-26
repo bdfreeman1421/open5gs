@@ -27,6 +27,7 @@ libsgwc_sources = files('''
     sxa-handler.h
     pfcp-path.h
     sgwc-sm.h
+    opof-util.h
 
     init.c
     event.c
@@ -41,6 +42,7 @@ libsgwc_sources = files('''
     pfcp-path.c
     pfcp-sm.c
     sgwc-sm.c
+    opof-util.c
 '''.split())
 
 libsgwc = static_library('sgwc',
@@ -50,11 +52,18 @@ libsgwc = static_library('sgwc',
                     libpfcp_dep],
     install : false)
 
+
+
+opof_libdir = '/opt/openoffload/lib'
+
+libopof_dep = cc.find_library('libopof_client', dirs : opof_libdir) # /opt/openoffload/lib
+
 libsgwc_dep = declare_dependency(
     link_with : libsgwc,
     dependencies : [libapp_dep,
                     libgtp_dep,
-                    libpfcp_dep])
+                    libpfcp_dep, libopof_dep])
+
 
 sgwc_sources = files('''
     app.c
@@ -67,4 +76,5 @@ executable('open5gs-sgwcd',
     include_directories : srcinc,
     dependencies : libsgwc_dep,
     install_rpath : libdir,
-    install : true)
+    install : true,
+    pie : false )
