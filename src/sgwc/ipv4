@@ -1,0 +1,6 @@
+context.c:    teid = be32toh(remote_f_teid->teid);
+context.c:    if (remote_f_teid->ipv4 && remote_f_teid->ipv6) {
+context.c:    } else if (remote_f_teid->ipv4) {
+context.c:        memcpy(addr, &remote_f_teid->addr, len);
+context.c:    } else if (remote_f_teid->ipv6) {
+context.c:        memcpy(addr, remote_f_teid->addr6, len);
